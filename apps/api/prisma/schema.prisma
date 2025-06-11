@@ -7,9 +7,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// === EXISTING MODELS ===
 model AuditLog {
   id            String   @id @default(cuid())
-  eventType     String   // AUTHENTICATION, AUTHORIZATION, SECURITY, BUSINESS_ACTIVITY
+  eventType     String   // AUTHENTICATION, AUTHORIZATION, SECURITY, BUSINESS_ACTIVITY, INVENTORY, WASTE, RECIPE
   event         String   // Specific event name
   severity      String   // LOW, MEDIUM, HIGH, CRITICAL
   userId        String?
@@ -109,23 +110,26 @@ model User {
   branchId             String?
   isActive             Boolean   @default(true)
   lastLoginAt          DateTime?
-  
-  // Add only these NEW fields (if they don't exist)
-  lastLoginIP          String?    // NEW - Track login IP
-  lastLoginLocation    String?    // NEW - Track login location  
-  loginAttempts        Int       @default(0)  // NEW - Failed login counter
-  lockedUntil          DateTime? // NEW - Account lockout timestamp
-  
-  // These already exist according to error - don't duplicate
-  passwordChangedAt    DateTime  @default(now()) // EXISTING
-  
+  lastLoginIP          String?
+  lastLoginLocation    String?
+  loginAttempts        Int       @default(0)
+  lockedUntil          DateTime?
+  passwordChangedAt    DateTime  @default(now())
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
   tenant               Tenant?   @relation(fields: [tenantId], references: [id])
   branch               Branch?   @relation(fields: [branchId], references: [id])
   refreshTokens        RefreshToken[]
-  passwordHistory      PasswordHistory[] // EXISTING
+  passwordHistory      PasswordHistory[]
+  
+  // NEW: Inventory and Waste Relations
+  inventoryItems       InventoryItem[]
+  inventoryAdjustments InventoryAdjustment[]
+  wasteEntries         WasteEntry[]
+  recipes              Recipe[]
+  approvalRequests     ApprovalRequest[] @relation("RequesterRelation")
+  approvalDecisions    ApprovalRequest[] @relation("ApproverRelation")
 
   @@map("users")
 }
@@ -143,16 +147,19 @@ model RefreshToken {
 }
 
 model Tenant {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  slug      String   @unique
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  passwordPolicy       PasswordPolicy?
+  id              String   @id @default(cuid())
+  name            String   @unique
+  slug            String   @unique
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  passwordPolicy  PasswordPolicy?
 
-  users     User[]
-  branches  Branch[]
+  users           User[]
+  branches        Branch[]
+  inventoryItems  InventoryItem[]
+  suppliers       Supplier[]
+  recipes         Recipe[]
 
   @@map("tenants")
 }
@@ -168,13 +175,450 @@ model Branch {
 
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   users     User[]
+  
+  // NEW: Inventory and Waste Relations
+  inventoryItems       InventoryItem[]
+  inventoryAdjustments InventoryAdjustment[]
+  wasteEntries         WasteEntry[]
 
   @@unique([tenantId, slug])
   @@map("branches")
 }
 
+// === NEW MODELS ===
+
+// INVENTORY MANAGEMENT
+model InventoryItem {
+  id               String            @id @default(cuid())
+  name             String
+  description      String?
+  category         InventoryCategory
+  unit             Unit
+  currentStock     Decimal           @default(0) @db.Decimal(10,3)
+  minStockLevel    Decimal           @default(0) @db.Decimal(10,3)
+  maxStockLevel    Decimal?          @db.Decimal(10,3)
+  averageCost      Decimal           @default(0) @db.Decimal(10,2)
+  lastCost         Decimal           @default(0) @db.Decimal(10,2)
+  
+  // Associations
+  tenantId         String
+  branchId         String
+  supplierId       String?
+  createdBy        String
+  
+  // FIFO and tracking
+  isPerishable     Boolean           @default(false)
+  defaultShelfLife Int?              // Days
+  
+  // Metadata
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  // Relations
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  branch           Branch            @relation(fields: [branchId], references: [id])
+  supplier         Supplier?         @relation(fields: [supplierId], references: [id])
+  creator          User              @relation(fields: [createdBy], references: [id])
+  
+  batches          InventoryBatch[]
+  adjustments      InventoryAdjustment[]
+  wasteEntries     WasteEntry[]
+  recipeIngredients RecipeIngredient[]
+
+  @@index([tenantId, branchId])
+  @@index([category])
+  @@index([currentStock, minStockLevel])
+  @@map("inventory_items")
+}
+
+model InventoryBatch {
+  id                  String    @id @default(cuid())
+  inventoryItemId     String
+  batchNumber         String
+  quantity            Decimal   @db.Decimal(10,3)
+  remainingQuantity   Decimal   @db.Decimal(10,3)
+  unitCost            Decimal   @db.Decimal(10,2)
+  totalCost           Decimal   @db.Decimal(10,2)
+  expiryDate          DateTime?
+  receivedDate        DateTime  @default(now())
+  supplierBatchNumber String?
+  
+  // Quality control
+  qualityGrade        String?   // A, B, C
+  notes               String?
+  
+  // Tracking
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relations
+  inventoryItem       InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  wasteEntries        WasteEntry[]
+
+  @@index([inventoryItemId, expiryDate])
+  @@index([expiryDate])
+  @@map("inventory_batches")
+}
+
+model InventoryAdjustment {
+  id               String           @id @default(cuid())
+  inventoryItemId  String
+  adjustmentType   AdjustmentType
+  quantity         Decimal          @db.Decimal(10,3)
+  reason           String
+  notes            String?
+  
+  // Approval workflow
+  status           ApprovalStatus   @default(PENDING)
+  approvalId       String?
+  
+  // Associations
+  branchId         String
+  createdBy        String
+  
+  // Tracking
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  // Relations
+  inventoryItem    InventoryItem    @relation(fields: [inventoryItemId], references: [id])
+  branch           Branch           @relation(fields: [branchId], references: [id])
+  creator          User             @relation(fields: [createdBy], references: [id])
+  approval         ApprovalRequest? @relation(fields: [approvalId], references: [id])
+
+  @@index([inventoryItemId, createdAt])
+  @@index([status])
+  @@map("inventory_adjustments")
+}
+
+// WASTE MANAGEMENT
+model WasteEntry {
+  id                String       @id @default(cuid())
+  wasteType         WasteType
+  
+  // Item details
+  inventoryItemId   String?      // For RAW waste
+  recipeId          String?      // For PRODUCT waste
+  batchId           String?      // Specific batch if applicable
+  
+  quantity          Decimal      @db.Decimal(10,3)
+  unit              Unit
+  estimatedCost     Decimal      @db.Decimal(10,2)
+  
+  // Waste details
+  reason            WasteReason
+  reasonDetail      String?
+  location          String?      // Kitchen, Storage, Service, etc.
+  
+  // Categorization
+  tags              String[]     // For filtering and reporting
+  
+  // Approval workflow (for significant waste)
+  status            ApprovalStatus @default(PENDING)
+  approvalId        String?
+  
+  // Associations
+  branchId          String
+  createdBy         String
+  
+  // Tracking
+  wastedAt          DateTime     @default(now())
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  // Relations
+  inventoryItem     InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+  recipe            Recipe?        @relation(fields: [recipeId], references: [id])
+  batch             InventoryBatch? @relation(fields: [batchId], references: [id])
+  branch            Branch         @relation(fields: [branchId], references: [id])
+  creator           User           @relation(fields: [createdBy], references: [id])
+  approval          ApprovalRequest? @relation(fields: [approvalId], references: [id])
+
+  @@index([branchId, wastedAt])
+  @@index([wasteType, reason])
+  @@index([status])
+  @@map("waste_entries")
+}
+
+// RECIPE MANAGEMENT
+model Recipe {
+  id                String             @id @default(cuid())
+  name              String
+  description       String?
+  category          RecipeCategory
+  
+  // Serving information
+  servingSize       Decimal            @db.Decimal(8,2)
+  servingUnit       String             @default("portion")
+  yield             Decimal            @db.Decimal(8,2)
+  yieldUnit         String
+  
+  // Costing
+  costPerServing    Decimal?           @db.Decimal(10,2)
+  laborCostPerServing Decimal?         @db.Decimal(10,2)
+  
+  // Instructions
+  prepTime          Int?               // Minutes
+  cookTime          Int?               // Minutes
+  instructions      String?
+  notes             String?
+  
+  // Media
+  imageUrl          String?
+  videoUrl          String?
+  
+  // Nutritional info
+  calories          Decimal?           @db.Decimal(8,2)
+  protein           Decimal?           @db.Decimal(8,2)
+  carbs             Decimal?           @db.Decimal(8,2)
+  fat               Decimal?           @db.Decimal(8,2)
+  
+  // Allergens and dietary
+  allergens         String[]
+  dietaryTags       String[]           // vegetarian, vegan, gluten-free, etc.
+  
+  // Versioning
+  version           Int                @default(1)
+  isActive          Boolean            @default(true)
+  
+  // Access control - Only Restaurant Admins can create/edit
+  tenantId          String
+  createdBy         String
+  
+  // Tracking
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  // Relations
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  creator           User               @relation(fields: [createdBy], references: [id])
+  ingredients       RecipeIngredient[]
+  wasteEntries      WasteEntry[]
+
+  @@index([tenantId, category])
+  @@index([isActive])
+  @@map("recipes")
+}
+
+model RecipeIngredient {
+  id               String         @id @default(cuid())
+  recipeId         String
+  inventoryItemId  String
+  quantity         Decimal        @db.Decimal(10,3)
+  unit             Unit
+  
+  // Processing details
+  preparation      String?        // diced, chopped, etc.
+  yieldPercentage  Decimal        @default(100) @db.Decimal(5,2) // Account for prep waste
+  
+  // Cost tracking
+  costPer          Decimal?       @db.Decimal(10,2)
+  
+  // Substitution
+  isOptional       Boolean        @default(false)
+  substitutes      String[]       // Array of substitute ingredient IDs
+  
+  // Tracking
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  // Relations
+  recipe           Recipe         @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  inventoryItem    InventoryItem  @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([recipeId])
+  @@map("recipe_ingredients")
+}
+
+// APPROVAL WORKFLOW
+model ApprovalRequest {
+  id               String              @id @default(cuid())
+  type             ApprovalType
+  status           ApprovalStatus      @default(PENDING)
+  
+  // Request details
+  title            String
+  description      String?
+  requestData      String              // JSON data of the request
+  
+  // Workflow
+  requestedBy      String
+  approverIds      String[]            // Can have multiple approvers
+  approvedBy       String?
+  rejectedBy       String?
+  
+  // Reasoning
+  approvalReason   String?
+  rejectionReason  String?
+  
+  // Threshold and routing
+  priority         Priority            @default(MEDIUM)
+  
+  // Timing
+  requestedAt      DateTime            @default(now())
+  dueDate          DateTime?
+  respondedAt      DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  // Relations
+  requester        User                @relation("RequesterRelation", fields: [requestedBy], references: [id])
+  approver         User?               @relation("ApproverRelation", fields: [approvedBy], references: [id])
+  
+  // Linked records
+  inventoryAdjustments InventoryAdjustment[]
+  wasteEntries         WasteEntry[]
+
+  @@index([status, type])
+  @@index([requestedBy])
+  @@index([approvedBy])
+  @@map("approval_requests")
+}
+
+// SUPPLIER MANAGEMENT
+model Supplier {
+  id               String            @id @default(cuid())
+  name             String
+  contactName      String?
+  email            String?
+  phone            String?
+  address          String?
+  
+  // Business details
+  taxId            String?
+  paymentTerms     String?
+  creditLimit      Decimal?          @db.Decimal(12,2)
+  
+  // Performance tracking
+  rating           Decimal?          @db.Decimal(3,2) // 1-5 scale
+  onTimeDelivery   Decimal?          @db.Decimal(5,2) // Percentage
+  qualityScore     Decimal?          @db.Decimal(5,2) // Percentage
+  
+  // Status
+  isActive         Boolean           @default(true)
+  
+  // Associations
+  tenantId         String
+  
+  // Tracking
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  // Relations
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  inventoryItems   InventoryItem[]
+
+  @@index([tenantId])
+  @@map("suppliers")
+}
+
+// ENUMS
 enum UserRole {
   KITCHZERO_ADMIN
   RESTAURANT_ADMIN
   BRANCH_ADMIN
+}
+
+enum InventoryCategory {
+  RAW_INGREDIENTS
+  FINISHED_PRODUCTS
+  BEVERAGES
+  PACKAGING
+  SUPPLIES
+  CLEANING
+  OTHER
+}
+
+enum Unit {
+  // Weight
+  KG
+  GRAMS
+  POUNDS
+  OUNCES
+  
+  // Volume
+  LITERS
+  ML
+  GALLONS
+  QUARTS
+  CUPS
+  
+  // Count
+  PIECES
+  BOXES
+  PACKAGES
+  DOZEN
+  
+  // Portion
+  PORTION
+  SERVING
+}
+
+enum AdjustmentType {
+  RECEIVED      // Stock received
+  SOLD          // Stock sold/used
+  WASTE         // Wasted/spoiled
+  TRANSFER      // Transfer between locations
+  COUNT         // Physical count adjustment
+  DAMAGED       // Damaged goods
+  THEFT         // Stolen items
+  OTHER         // Other reasons
+}
+
+enum WasteType {
+  RAW           // Raw ingredients/inventory waste
+  PRODUCT       // Finished product waste (follows recipes)
+}
+
+enum WasteReason {
+  EXPIRED       // Past expiry date
+  SPOILED       // Spoiled/rotten
+  OVERCOOKED    // Cooking error
+  DROPPED       // Accidentally dropped
+  CONTAMINATED  // Cross-contamination
+  WRONG_ORDER   // Wrong customer order
+  EXCESS_PREP   // Over-preparation
+  CUSTOMER_RETURN // Customer returned food
+  QUALITY_ISSUE // Quality not meeting standards
+  EQUIPMENT_FAILURE // Equipment malfunction
+  OTHER         // Other reasons
+}
+
+enum RecipeCategory {
+  APPETIZER
+  MAIN_COURSE
+  DESSERT
+  BEVERAGE
+  SIDE_DISH
+  SAUCE
+  MARINADE
+  DRESSING
+  BREAD
+  SOUP
+  SALAD
+  PREPARATION   // Sub-recipes/prep items
+  OTHER
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ApprovalType {
+  INVENTORY_ADJUSTMENT
+  WASTE_ENTRY
+  RECIPE_CHANGE
+  MENU_PRICING
+  SUPPLIER_CHANGE
+  OTHER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }
