@@ -1,3 +1,4 @@
+/* apps/web/app/globals.css */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @tailwind base;
 @tailwind components;
@@ -46,10 +47,199 @@
   .text-gradient {
     @apply bg-gradient-to-r from-primary-600 to-secondary-700 bg-clip-text text-transparent;
   }
+  
+  /* Fixed button styles to always show primary colors */
+  .btn-primary {
+    @apply bg-gradient-to-r from-primary-600 to-primary-700 text-white;
+    box-shadow: 0 4px 14px 0 rgba(109, 186, 126, 0.3);
+  }
+  
+  .btn-primary:hover:not(:disabled) {
+    @apply from-primary-700 to-primary-800;
+    box-shadow: 0 6px 20px 0 rgba(109, 186, 126, 0.4);
+  }
+  
+  .btn-primary:disabled {
+    @apply opacity-60 cursor-not-allowed;
+    /* Keep the same colors but with reduced opacity */
+  }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+  
+  /* Simple animations */
+  .animate-fade-in {
+    animation: fadeIn 0.8s ease-out forwards;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.6s ease-out forwards;
+    opacity: 0;
+  }
+  
+  .animate-slide-in-left {
+    animation: slideInLeft 0.8s ease-out forwards;
+  }
+  
+  .animate-shake {
+    animation: shake 0.5s ease-in-out;
+  }
+  
+  /* Delay classes */
+  .delay-100 { animation-delay: 0.1s; }
+  .delay-200 { animation-delay: 0.2s; }
+  .delay-300 { animation-delay: 0.3s; }
+  .delay-400 { animation-delay: 0.4s; }
+  .delay-500 { animation-delay: 0.5s; }
+}
+
+/* Keyframe animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+/* Enhanced hover effects */
+.group:hover .group-hover\:scale-105 {
+  transform: scale(1.05);
+}
+
+.group:hover .group-hover\:scale-110 {
+  transform: scale(1.1);
+}
+
+.group:hover .group-hover\:-translate-y-1 {
+  transform: translateY(-0.25rem);
+}
+
+.group:hover .group-hover\:translate-x-1 {
+  transform: translateX(0.25rem);
+}
+
+/* Glass morphism */
+.backdrop-blur-sm {
+  backdrop-filter: blur(8px);
+}
+
+.backdrop-blur-xl {
+  backdrop-filter: blur(24px);
+}
+
+/* Gradient text */
+.bg-clip-text {
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Focus improvements */
+input:focus,
+button:focus {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+/* Button active states */
+button:active:not(:disabled) {
+  transition: transform 0.1s ease;
+  transform: scale(0.98);
+}
+
+/* Enhanced button styles */
+button:disabled {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Ensure primary buttons always have proper colors */
+.bg-gradient-to-r.from-primary-600.to-primary-700 {
+  background: linear-gradient(to right, #059669, #047857) !important;
+}
+
+.bg-gradient-to-r.from-primary-600.to-primary-700:hover:not(:disabled) {
+  background: linear-gradient(to right, #047857, #065f46) !important;
+}
+
+/* Responsive optimizations */
+@media (max-width: 640px) {
+  .group:hover .group-hover\:scale-110 {
+    transform: scale(1.05);
+  }
+  
+  .animate-fade-in {
+    animation-duration: 0.6s;
+  }
+}
+
+/* Performance optimizations */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-slide-in-left,
+  .animate-shake {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  
+  .group:hover .group-hover\:scale-105,
+  .group:hover .group-hover\:scale-110,
+  .group:hover .group-hover\:-translate-y-1,
+  .group:hover .group-hover\:translate-x-1 {
+    transform: none;
+  }
+}
+
+/* Improved touch targets for mobile */
+@media (max-width: 768px) {
+  button {
+    min-height: 44px;
+  }
+  
+  .backdrop-blur-xl {
+    backdrop-filter: blur(16px);
   }
 }

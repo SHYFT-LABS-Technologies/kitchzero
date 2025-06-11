@@ -1,3 +1,4 @@
+// apps/web/components/auth/login-form.tsx
 'use client'
 
 import { useState } from 'react'
@@ -46,14 +47,11 @@ export function LoginForm() {
     try {
       const response = await AuthService.login(data)
 
-      // CRITICAL: Check if password change is required
       if (response.user.mustChangePassword) {
-        // Redirect to password change with context
         router.push('/auth/change-password?forced=true&reason=first_login')
         return
       }
 
-      // CRITICAL: Role-based dashboard routing
       switch (response.user.role) {
         case 'KITCHZERO_ADMIN':
           router.push('/dashboard/admin')
@@ -87,156 +85,124 @@ export function LoginForm() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Mobile Logo */}
-      <div className="lg:hidden text-center">
-        <div className="inline-flex items-center space-x-3 mb-8">
-          <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <span className="text-2xl font-bold text-neutral-900">KitchZero</span>
-        </div>
-      </div>
-
+    <div className="w-full max-w-md mx-auto animate-fade-in">
       {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold text-neutral-900">Welcome back</h1>
-        <p className="text-neutral-600">Sign in to your account</p>
+      <div className="text-center mb-8 animate-slide-up">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome back</h1>
+        <p className="text-gray-600">Sign in to your account</p>
       </div>
 
-      {/* Login Form */}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Error Message */}
-        {error && (
-          <div className="flex items-start space-x-3 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <ExclamationTriangleIcon className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-red-700">
-              <p className="font-medium">Sign in failed</p>
-              <p>{error}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Username Field */}
-        <div className="space-y-2">
-          <Label htmlFor="username" className="text-sm font-medium text-neutral-800">
-            Username
-          </Label>
-          <Input
-            id="username"
-            type="text"
-            placeholder="Enter your username"
-            className={`h-12 text-base ${errors.username
-                ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
-                : ''
-              }`}
-            {...register('username')}
-            disabled={isLoading}
-          />
-          {errors.username && (
-            <p className="text-sm text-red-600">
-              {errors.username.message}
-            </p>
-          )}
-        </div>
-
-        {/* Password Field */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password" className="text-sm font-medium text-neutral-800">
-              Password
-            </Label>
-            <button
-              type="button"
-              className="text-sm text-primary-600 hover:text-primary-700 transition-colors"
-            >
-              Forgot password?
-            </button>
-          </div>
-          <div className="relative">
-            <Input
-              id="password"
-              type={showPassword ? 'text' : 'password'}
-              placeholder="Enter your password"
-              className={`h-12 text-base pr-12 ${errors.password
-                  ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
-                  : ''
-                }`}
-              {...register('password')}
-              disabled={isLoading}
-            />
-            <button
-              type="button"
-              className="absolute inset-y-0 right-0 pr-4 flex items-center text-neutral-400 hover:text-neutral-600 transition-colors"
-              onClick={() => setShowPassword(!showPassword)}
-              disabled={isLoading}
-              tabIndex={-1}
-            >
-              {showPassword ? (
-                <EyeSlashIcon className="h-5 w-5" />
-              ) : (
-                <EyeIcon className="h-5 w-5" />
-              )}
-            </button>
-          </div>
-          {errors.password && (
-            <p className="text-sm text-red-600">
-              {errors.password.message}
-            </p>
-          )}
-        </div>
-
-        {/* Submit Button */}
-        <Button
-          type="submit"
-          className="w-full h-12 text-base font-semibold"
-          disabled={isLoading || !isValid}
-        >
-          {isLoading ? (
-            <div className="flex items-center justify-center space-x-2">
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              <span>Signing in...</span>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center space-x-2">
-              <span>Sign in</span>
-              <ArrowRightIcon className="w-4 h-4" />
-            </div>
-          )}
-        </Button>
-      </form>
-
-      {/* Demo Credentials - Compact */}
-      <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
-        <h3 className="text-sm font-medium text-neutral-800 mb-3 text-center">Demo Accounts</h3>
-        <div className="space-y-2">
-          {[
-            { role: 'Admin', user: 'admin', pass: 'Admin123!' },
-            { role: 'Restaurant', user: 'restaurant_admin', pass: 'RestaurantAdmin123!' },
-            { role: 'Branch', user: 'branch_admin', pass: 'BranchAdmin123!' }
-          ].map((account, index) => (
-            <div key={index} className="flex items-center justify-between text-sm bg-white rounded p-2 border">
-              <span className="font-medium text-neutral-700">{account.role}</span>
-              <div className="text-neutral-600">
-                <span className="font-mono">{account.user}</span>
-                <span className="mx-2">•</span>
-                <span className="font-mono">{account.pass}</span>
+      {/* Enhanced Form Card */}
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 animate-slide-up delay-100">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {/* Error Message */}
+          {error && (
+            <div className="animate-shake">
+              <div className="flex items-center space-x-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+                <ExclamationTriangleIcon className="w-5 h-5 text-red-500 flex-shrink-0" />
+                <div className="text-sm text-red-700">
+                  <p className="font-medium">Sign in failed</p>
+                  <p>{error}</p>
+                </div>
               </div>
             </div>
-          ))}
-        </div>
+          )}
+
+          {/* Username Field */}
+          <div className="space-y-2 group">
+            <Label htmlFor="username" className="text-sm font-semibold text-gray-700 group-focus-within:text-primary-600 transition-colors">
+              Username
+            </Label>
+            <div className="relative">
+              <Input
+                id="username"
+                type="text"
+                placeholder="Enter your username"
+                className={`h-12 bg-gray-50 border-gray-200 focus:bg-white focus:border-primary-500 focus:ring-primary-500/20 transition-all duration-300 ${
+                  errors.username ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : ''
+                }`}
+                {...register('username')}
+                disabled={isLoading}
+              />
+              <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-primary-500 to-primary-600 rounded-l-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-300"></div>
+            </div>
+            {errors.username && (
+              <p className="text-sm text-red-600 animate-fade-in">{errors.username.message}</p>
+            )}
+          </div>
+
+          {/* Password Field */}
+          <div className="space-y-2 group">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password" className="text-sm font-semibold text-gray-700 group-focus-within:text-primary-600 transition-colors">
+                Password
+              </Label>
+              <button
+                type="button"
+                className="text-sm text-primary-600 hover:text-primary-700 font-medium transition-all duration-200 hover:scale-105"
+              >
+                Forgot password?
+              </button>
+            </div>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Enter your password"
+                className={`h-12 pr-12 bg-gray-50 border-gray-200 focus:bg-white focus:border-primary-500 focus:ring-primary-500/20 transition-all duration-300 ${
+                  errors.password ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : ''
+                }`}
+                {...register('password')}
+                disabled={isLoading}
+              />
+              <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-primary-500 to-primary-600 rounded-l-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-300"></div>
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-all duration-200 hover:scale-110"
+                onClick={() => setShowPassword(!showPassword)}
+                disabled={isLoading}
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <EyeSlashIcon className="h-5 w-5" />
+                ) : (
+                  <EyeIcon className="h-5 w-5" />
+                )}
+              </button>
+            </div>
+            {errors.password && (
+              <p className="text-sm text-red-600 animate-fade-in">{errors.password.message}</p>
+            )}
+          </div>
+
+          {/* Fixed Submit Button - Always Primary Colors */}
+          <Button
+            type="submit"
+            className="w-full h-12 text-sm font-semibold bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+            disabled={isLoading || !isValid}
+          >
+            {isLoading ? (
+              <div className="flex items-center justify-center space-x-2">
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Signing in...</span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center space-x-2 group">
+                <span>Sign in</span>
+                <ArrowRightIcon className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
+              </div>
+            )}
+          </Button>
+        </form>
       </div>
 
       {/* Footer */}
-      <div className="text-center text-sm text-neutral-500 space-y-3">
-        <div className="flex justify-center space-x-6">
-          <a href="#" className="hover:text-primary-600 transition-colors">Privacy</a>
-          <a href="#" className="hover:text-primary-600 transition-colors">Terms</a>
-          <a href="#" className="hover:text-primary-600 transition-colors">Support</a>
+      <div className="mt-8 text-center animate-slide-up delay-200">
+        <div className="flex justify-center space-x-6 text-sm text-gray-500">
+          <a href="#" className="hover:text-primary-600 transition-all duration-200 hover:scale-105">Privacy</a>
+          <a href="#" className="hover:text-primary-600 transition-all duration-200 hover:scale-105">Terms</a>
+          <a href="#" className="hover:text-primary-600 transition-all duration-200 hover:scale-105">Support</a>
         </div>
-        <p>© 2024 KitchZero. All rights reserved.</p>
       </div>
     </div>
   )
