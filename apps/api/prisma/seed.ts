@@ -1,51 +1,44 @@
 import { PrismaClient, UserRole } from '@prisma/client';
 import { PasswordService } from '../src/services/password.service';
+import { AuditLogService } from '../src/services/audit-log.service';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Seeding database...');
+  console.log('🧨 Clearing existing data...');
+  await prisma.user.deleteMany({});
+  await prisma.branch.deleteMany({});
+  await prisma.tenant.deleteMany({});
+  await prisma.passwordPolicy.deleteMany({});
+
+  console.log('🌱 Seeding fresh data...');
 
   // Create KitchZero admin user
-  const adminPassword = await PasswordService.hash('Admin123!');
-  
-  const admin = await prisma.user.upsert({
-    where: { username: 'admin' },
-    update: {},
-    create: {
+  const adminPassword = await PasswordService.hash('Admin123!SecureKZ');
+
+  const admin = await prisma.user.create({
+    data: {
       username: 'admin',
       passwordHash: adminPassword,
       role: UserRole.KITCHZERO_ADMIN,
       mustChangePassword: false,
-      isActive: true
+      isActive: true,
+      passwordChangedAt: new Date()
     }
   });
 
   console.log('✅ Created admin user:', admin.username);
 
-  // Create a sample tenant
-  const tenant = await prisma.tenant.upsert({
-    where: { name: 'Demo Restaurant Group' },
-    update: {},
-    create: {
+  const tenant = await prisma.tenant.create({
+    data: {
       name: 'Demo Restaurant Group',
       slug: 'demo-restaurant-group',
       isActive: true
     }
   });
 
-  console.log('✅ Created tenant:', tenant.name);
-
-  // Create a sample branch
-  const branch = await prisma.branch.upsert({
-    where: { 
-      tenantId_slug: {
-        tenantId: tenant.id,
-        slug: 'main-branch'
-      }
-    },
-    update: {},
-    create: {
+  const mainBranch = await prisma.branch.create({
+    data: {
       name: 'Main Branch',
       slug: 'main-branch',
       tenantId: tenant.id,
@@ -53,55 +46,114 @@ async function main() {
     }
   });
 
-  console.log('✅ Created branch:', branch.name);
+  const downtownBranch = await prisma.branch.create({
+    data: {
+      name: 'Downtown Branch',
+      slug: 'downtown-branch',
+      tenantId: tenant.id,
+      isActive: true
+    }
+  });
 
-  // Create restaurant admin
-  const restaurantAdminPassword = await PasswordService.hash('RestaurantAdmin123!');
-  
-  const restaurantAdmin = await prisma.user.upsert({
-    where: { username: 'restaurant_admin' },
-    update: {},
-    create: {
+  console.log('✅ Created branches:', mainBranch.name, downtownBranch.name);
+
+  // Restaurant Admin
+  const restaurantAdminPassword = await PasswordService.hash('RestAdmin123!');
+  const restaurantAdmin = await prisma.user.create({
+    data: {
       username: 'restaurant_admin',
       passwordHash: restaurantAdminPassword,
       role: UserRole.RESTAURANT_ADMIN,
       tenantId: tenant.id,
-      mustChangePassword: true, // Force password change on first login
-      isActive: true
+      mustChangePassword: true,
+      isActive: true,
+      passwordChangedAt: new Date(0)
     }
   });
 
-  console.log('✅ Created restaurant admin:', restaurantAdmin.username);
-
-  // Create branch admin
-  const branchAdminPassword = await PasswordService.hash('BranchAdmin123!');
-  
-  const branchAdmin = await prisma.user.upsert({
-    where: { username: 'branch_admin' },
-    update: {},
-    create: {
-      username: 'branch_admin',
-      passwordHash: branchAdminPassword,
+  // Branch Admins
+  const mainBranchPassword = await PasswordService.hash('MainBranch123!');
+  const mainBranchAdmin = await prisma.user.create({
+    data: {
+      username: 'main_branch_admin',
+      passwordHash: mainBranchPassword,
       role: UserRole.BRANCH_ADMIN,
       tenantId: tenant.id,
-      branchId: branch.id,
-      mustChangePassword: true, // Force password change on first login
-      isActive: true
+      branchId: mainBranch.id,
+      mustChangePassword: true,
+      isActive: true,
+      passwordChangedAt: new Date(0)
     }
   });
 
-  console.log('✅ Created branch admin:', branchAdmin.username);
+  const downtownBranchPassword = await PasswordService.hash('Downtown123!');
+  const downtownBranchAdmin = await prisma.user.create({
+    data: {
+      username: 'downtown_branch_admin',
+      passwordHash: downtownBranchPassword,
+      role: UserRole.BRANCH_ADMIN,
+      tenantId: tenant.id,
+      branchId: downtownBranch.id,
+      mustChangePassword: true,
+      isActive: true,
+      passwordChangedAt: new Date(0)
+    }
+  });
 
-  console.log('\n🎉 Seeding completed!');
-  console.log('\nTest users created:');
-  console.log('1. admin / Admin123! (KITCHZERO_ADMIN)');
-  console.log('2. restaurant_admin / RestaurantAdmin123! (RESTAURANT_ADMIN) - must change password');
-  console.log('3. branch_admin / BranchAdmin123! (BRANCH_ADMIN) - must change password');
+  await prisma.passwordPolicy.create({
+    data: {
+      tenantId: tenant.id,
+      minLength: 12,
+      maxLength: 128,
+      requireLowercase: true,
+      requireUppercase: true,
+      requireNumbers: true,
+      requireSpecialChars: true,
+      preventCommonWords: true,
+      preventPersonalInfo: true,
+      historyCount: 5,
+      maxFailedAttempts: 5,
+      lockoutDurationMinutes: 15
+    }
+  });
+
+  await AuditLogService.logBusinessActivity({
+    event: 'INITIAL_USERS_CREATED',
+    action: 'CREATE',
+    resourceType: 'USER_ACCOUNTS',
+    resourceId: tenant.id,
+    userId: 'SYSTEM',
+    username: 'SYSTEM',
+    tenantId: tenant.id,
+    details: {
+      usersCreated: [
+        { username: 'restaurant_admin', role: 'RESTAURANT_ADMIN' },
+        { username: 'main_branch_admin', role: 'BRANCH_ADMIN' },
+        { username: 'downtown_branch_admin', role: 'BRANCH_ADMIN' }
+      ]
+    }
+  });
+
+  console.log('\n🎉 Database seeding completed successfully!');
+  console.log('\n📋 LOGIN CREDENTIALS:');
+  console.log('================================');
+  console.log('1. System Admin:');
+  console.log('   Username: admin');
+  console.log('   Password: Admin123!SecureKZ\n');
+  console.log('2. Restaurant Admin:');
+  console.log('   Username: restaurant_admin');
+  console.log('   Password: RestAdmin123!\n');
+  console.log('3. Main Branch Admin:');
+  console.log('   Username: main_branch_admin');
+  console.log('   Password: MainBranch123!\n');
+  console.log('4. Downtown Branch Admin:');
+  console.log('   Username: downtown_branch_admin');
+  console.log('   Password: Downtown123!\n');
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error('❌ Seeding failed:', e);
     process.exit(1);
   })
   .finally(async () => {

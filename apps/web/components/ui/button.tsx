@@ -1,8 +1,6 @@
+// apps/web/components/ui/button.tsx (Add size variants)
 import * as React from "react"
-
-const cn = (...inputs: (string | undefined)[]) => {
-  return inputs.filter(Boolean).join(' ')
-}
+import { cn } from "@/lib/utils"
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link'
@@ -11,7 +9,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'default', size = 'default', ...props }, ref) => {
-    const baseClasses = "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+    const baseClasses = "inline-flex items-center justify-center whitespace-nowrap rounded-lg font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
     
     const variantClasses = {
       default: "bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg hover:shadow-xl hover:from-primary-600 hover:to-primary-700 active:scale-95",
@@ -23,8 +21,8 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     }
     
     const sizeClasses = {
-      default: "h-10 px-4 py-2",
-      sm: "h-9 rounded-md px-3 text-xs",
+      default: "h-10 px-4 py-2 text-sm",
+      sm: "h-8 rounded-md px-3 text-xs",
       lg: "h-12 rounded-lg px-6 text-base",
       icon: "h-10 w-10",
     }

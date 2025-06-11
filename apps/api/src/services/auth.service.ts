@@ -1,3 +1,4 @@
+// apps/api/src/services/auth.service.ts (Updated)
 import { PrismaClient } from '@prisma/client';
 import { 
   User, 
@@ -97,21 +98,66 @@ export class AuthService {
       throw new Error('Current password is incorrect');
     }
 
-    // Validate new password
-    const validation = PasswordService.validate(newPassword);
+    // Validate new password with built-in validation
+    const validation = this.validatePasswordStrength(newPassword, user.username);
     if (!validation.isValid) {
       throw new Error(`Invalid password: ${validation.errors.join(', ')}`);
+    }
+
+    // Check password history (simplified)
+    const passwordHistoryCheck = await this.checkPasswordHistory(userId, newPassword);
+    if (!passwordHistoryCheck.passed) {
+      throw new Error(passwordHistoryCheck.message || 'Cannot reuse recent passwords');
     }
 
     // Hash new password
     const newPasswordHash = await PasswordService.hash(newPassword);
 
-    // Update password and clear mustChangePassword flag
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        passwordHash: newPasswordHash,
-        mustChangePassword: false
+    // Database transaction for consistency
+    await prisma.$transaction(async (tx) => {
+      // Store current password in history (if table exists)
+      try {
+        await tx.passwordHistory.create({
+          data: {
+            userId,
+            passwordHash: user.passwordHash,
+            createdAt: new Date()
+          }
+        });
+      } catch (error) {
+        // Table might not exist yet, continue
+        console.warn('Password history table not available:', error.message);
+      }
+
+      // Update user password
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash: newPasswordHash,
+          mustChangePassword: false,
+          passwordChangedAt: new Date(),
+          loginAttempts: 0,
+          lockedUntil: null
+        }
+      });
+
+      // Clean up old password history (keep only last 10)
+      try {
+        const oldPasswords = await tx.passwordHistory.findMany({
+          where: { userId },
+          orderBy: { createdAt: 'desc' },
+          skip: 10
+        });
+
+        if (oldPasswords.length > 0) {
+          await tx.passwordHistory.deleteMany({
+            where: {
+              id: { in: oldPasswords.map(p => p.id) }
+            }
+          });
+        }
+      } catch (error) {
+        // Table might not exist yet, continue
       }
     });
 
@@ -119,6 +165,116 @@ export class AuthService {
     await prisma.refreshToken.deleteMany({
       where: { userId }
     });
+  }
+
+  // Built-in password validation (no external dependency)
+  static validatePasswordStrength(password: string, username?: string): {
+    isValid: boolean;
+    errors: string[];
+    score: number;
+  } {
+    const errors: string[] = [];
+    let score = 0;
+
+    // Length check
+    if (password.length >= 12) {
+      score += 25;
+    } else {
+      errors.push('Password must be at least 12 characters long');
+    }
+
+    if (password.length > 128) {
+      errors.push('Password must be less than 128 characters');
+    }
+
+    // Character variety
+    if (/[a-z]/.test(password)) {
+      score += 15;
+    } else {
+      errors.push('Password must contain at least one lowercase letter');
+    }
+
+    if (/[A-Z]/.test(password)) {
+      score += 15;
+    } else {
+      errors.push('Password must contain at least one uppercase letter');
+    }
+
+    if (/\d/.test(password)) {
+      score += 15;
+    } else {
+      errors.push('Password must contain at least one number');
+    }
+
+    if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      score += 15;
+    } else {
+      errors.push('Password must contain at least one special character');
+    }
+
+    // Pattern checks
+    if (!/(.)\1{2,}/.test(password)) {
+      score += 10;
+    } else {
+      errors.push('Password cannot contain repeated characters');
+    }
+
+    // Common passwords check
+    const commonPasswords = [
+      'password', 'password123', '123456', 'admin', 'letmein',
+      'welcome', 'monkey', 'dragon', 'pass', 'master'
+    ];
+    
+    if (!commonPasswords.includes(password.toLowerCase())) {
+      score += 5;
+    } else {
+      errors.push('Password is too common');
+    }
+
+    // Username check
+    if (username && password.toLowerCase().includes(username.toLowerCase())) {
+      errors.push('Password cannot contain your username');
+      score = Math.max(0, score - 20);
+    }
+
+    return {
+      isValid: errors.length === 0 && score >= 70,
+      errors,
+      score: Math.min(100, score)
+    };
+  }
+
+  // Check password history to prevent reuse
+  static async checkPasswordHistory(
+    userId: string, 
+    newPassword: string, 
+    historyCount: number = 5
+  ): Promise<{ passed: boolean; message?: string }> {
+    try {
+      // Get recent password hashes
+      const passwordHistory = await prisma.passwordHistory.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: historyCount
+      });
+
+      // Check if new password matches any in history
+      for (const historyEntry of passwordHistory) {
+        const matches = await PasswordService.verify(newPassword, historyEntry.passwordHash);
+        if (matches) {
+          return {
+            passed: false,
+            message: `Cannot reuse any of your last ${historyCount} passwords`
+          };
+        }
+      }
+
+      return { passed: true };
+    } catch (error) {
+      console.error('Password history check failed:', error);
+      // Fail safe - allow if check fails
+      return { passed: true };
+    }
   }
 
   static async refreshTokens(refreshToken: string): Promise<AuthTokens> {

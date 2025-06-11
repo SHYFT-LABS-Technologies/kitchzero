@@ -7,6 +7,98 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model AuditLog {
+  id            String   @id @default(cuid())
+  eventType     String   // AUTHENTICATION, AUTHORIZATION, SECURITY, BUSINESS_ACTIVITY
+  event         String   // Specific event name
+  severity      String   // LOW, MEDIUM, HIGH, CRITICAL
+  userId        String?
+  username      String?
+  role          String?
+  tenantId      String?
+  branchId      String?
+  ipAddress     String?
+  userAgent     String?
+  sessionId     String?
+  requestPath   String?
+  requestMethod String?
+  reason        String?
+  details       String?  // JSON string for additional data
+  timestamp     DateTime @default(now())
+  geolocation   String?
+  
+  @@index([eventType, timestamp])
+  @@index([userId, timestamp])
+  @@index([tenantId, timestamp])
+  @@index([ipAddress, timestamp])
+  @@index([severity, timestamp])
+  @@map("audit_logs")
+}
+
+model RateLimitLog {
+  id         String   @id @default(cuid())
+  identifier String   // IP address or user ID
+  action     String   // auth, api, password-reset
+  blocked    Boolean  @default(false)
+  timestamp  DateTime @default(now())
+
+  @@index([identifier, action, timestamp])
+  @@map("rate_limit_logs")
+}
+
+model SecurityEvent {
+  id          String   @id @default(cuid())
+  eventType   String   // BRUTE_FORCE, ANOMALY, BREACH_ATTEMPT
+  severity    String   // LOW, MEDIUM, HIGH, CRITICAL
+  userId      String?
+  ipAddress   String?
+  description String
+  metadata    String?  // JSON string
+  resolved    Boolean  @default(false)
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([eventType, severity, createdAt])
+  @@index([resolved, severity])
+  @@map("security_events")
+}
+
+model PasswordHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, createdAt])
+  @@map("password_history")
+}
+
+model PasswordPolicy {
+  id                    String   @id @default(cuid())
+  tenantId              String?  // Null for global policy
+  minLength             Int      @default(12)
+  maxLength             Int      @default(128)
+  requireLowercase      Boolean  @default(true)
+  requireUppercase      Boolean  @default(true)
+  requireNumbers        Boolean  @default(true)
+  requireSpecialChars   Boolean  @default(true)
+  preventCommonWords    Boolean  @default(true)
+  preventPersonalInfo   Boolean  @default(true)
+  historyCount          Int      @default(5)
+  maxFailedAttempts     Int      @default(5)
+  lockoutDurationMinutes Int     @default(15)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  tenant                Tenant?  @relation(fields: [tenantId], references: [id])
+  
+  @@unique([tenantId])
+  @@map("password_policies")
+}
+
 model User {
   id                   String    @id @default(cuid())
   username             String    @unique
@@ -17,12 +109,23 @@ model User {
   branchId             String?
   isActive             Boolean   @default(true)
   lastLoginAt          DateTime?
+  
+  // Add only these NEW fields (if they don't exist)
+  lastLoginIP          String?    // NEW - Track login IP
+  lastLoginLocation    String?    // NEW - Track login location  
+  loginAttempts        Int       @default(0)  // NEW - Failed login counter
+  lockedUntil          DateTime? // NEW - Account lockout timestamp
+  
+  // These already exist according to error - don't duplicate
+  passwordChangedAt    DateTime  @default(now()) // EXISTING
+  
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
   tenant               Tenant?   @relation(fields: [tenantId], references: [id])
   branch               Branch?   @relation(fields: [branchId], references: [id])
   refreshTokens        RefreshToken[]
+  passwordHistory      PasswordHistory[] // EXISTING
 
   @@map("users")
 }
@@ -46,6 +149,7 @@ model Tenant {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  passwordPolicy       PasswordPolicy?
 
   users     User[]
   branches  Branch[]

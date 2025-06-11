@@ -1,3 +1,4 @@
+// apps/web/tailwind.config.js
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -63,7 +64,7 @@ module.exports = {
           900: '#171717',
           950: '#0a0a0a',
         },
-        // Modern UI colors
+        // Modern UI colors for components
         background: '#fafafa',
         foreground: '#171717',
         card: '#ffffff',
@@ -71,6 +72,10 @@ module.exports = {
         border: '#e5e5e5',
         input: '#f5f5f5',
         ring: '#6DBA7E',
+        destructive: {
+          DEFAULT: '#ef4444',
+          foreground: '#fef2f2',
+        },
         success: '#22c55e',
         warning: '#f59e0b',
         error: '#ef4444',

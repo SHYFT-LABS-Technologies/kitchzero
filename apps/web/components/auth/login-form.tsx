@@ -45,16 +45,31 @@ export function LoginForm() {
 
     try {
       const response = await AuthService.login(data)
-      
+
+      // CRITICAL: Check if password change is required
       if (response.user.mustChangePassword) {
-        router.push('/auth/change-password')
+        // Redirect to password change with context
+        router.push('/auth/change-password?forced=true&reason=first_login')
         return
       }
 
-      router.push('/dashboard')
+      // CRITICAL: Role-based dashboard routing
+      switch (response.user.role) {
+        case 'KITCHZERO_ADMIN':
+          router.push('/dashboard/admin')
+          break
+        case 'RESTAURANT_ADMIN':
+          router.push('/dashboard/restaurant-admin')
+          break
+        case 'BRANCH_ADMIN':
+          router.push('/dashboard/branch-admin')
+          break
+        default:
+          router.push('/dashboard')
+      }
     } catch (err) {
       const errorMessage = formatError(err)
-      
+
       if (errorMessage.includes('Invalid username or password')) {
         setFieldError('username', { message: ' ' })
         setFieldError('password', { message: ' ' })
@@ -113,11 +128,10 @@ export function LoginForm() {
             id="username"
             type="text"
             placeholder="Enter your username"
-            className={`h-12 text-base ${
-              errors.username 
-                ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' 
+            className={`h-12 text-base ${errors.username
+                ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
                 : ''
-            }`}
+              }`}
             {...register('username')}
             disabled={isLoading}
           />
@@ -134,8 +148,8 @@ export function LoginForm() {
             <Label htmlFor="password" className="text-sm font-medium text-neutral-800">
               Password
             </Label>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className="text-sm text-primary-600 hover:text-primary-700 transition-colors"
             >
               Forgot password?
@@ -146,11 +160,10 @@ export function LoginForm() {
               id="password"
               type={showPassword ? 'text' : 'password'}
               placeholder="Enter your password"
-              className={`h-12 text-base pr-12 ${
-                errors.password 
-                  ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' 
+              className={`h-12 text-base pr-12 ${errors.password
+                  ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
                   : ''
-              }`}
+                }`}
               {...register('password')}
               disabled={isLoading}
             />

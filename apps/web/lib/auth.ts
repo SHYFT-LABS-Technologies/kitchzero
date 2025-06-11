@@ -1,3 +1,4 @@
+// apps/web/lib/auth.ts (Update API calls)
 import Cookies from 'js-cookie'
 
 export interface User {
@@ -45,7 +46,7 @@ export class AuthService {
     // Store tokens and user data
     const { user, tokens } = data.data
     Cookies.set(this.ACCESS_TOKEN_KEY, tokens.accessToken, { 
-      expires: 7, // 7 days
+      expires: 7,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict'
     })
@@ -61,6 +62,71 @@ export class AuthService {
     })
 
     return data.data
+  }
+
+  // NEW: Change password method
+  static async changePassword(data: {
+    currentPassword: string
+    newPassword: string
+    confirmPassword: string
+  }): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.getAccessToken()}`
+      },
+      credentials: 'include',
+      body: JSON.stringify(data)
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Password change failed')
+    }
+
+    return result
+  }
+
+  // NEW: Check password strength
+  static async checkPasswordStrength(password: string, username?: string): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/auth/check-password-strength`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.getAccessToken()}`
+      },
+      credentials: 'include',
+      body: JSON.stringify({ password, username })
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Password strength check failed')
+    }
+
+    return result
+  }
+
+  // NEW: Get password requirements
+  static async getPasswordRequirements(): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/auth/password-requirements`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${this.getAccessToken()}`
+      },
+      credentials: 'include'
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to fetch password requirements')
+    }
+
+    return result
   }
 
   static async logout(): Promise<void> {
@@ -120,7 +186,7 @@ export class AuthService {
       })
 
       if (!response.ok) {
-        this.logout() // Clear invalid session
+        this.logout()
         return null
       }
 

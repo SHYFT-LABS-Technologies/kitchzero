@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import helmet from '@fastify/helmet';
 import { config } from '@kitchzero/config';
 import { authRoutes } from './routes/auth.routes';
+//import {  } from './routes/change-password.routes';
 
 const fastify = Fastify({
   logger: {
@@ -142,6 +143,9 @@ const start = async () => {
 
     // Register auth routes
     await fastify.register(authRoutes, { prefix: '/auth' });
+
+    // CRITICAL: Register change password routes
+    //await fastify.register(changePasswordRoutes, { prefix: '/auth' });
 
     // CRITICAL: Enhanced error handler with security considerations
     fastify.setErrorHandler((error, request, reply) => {
