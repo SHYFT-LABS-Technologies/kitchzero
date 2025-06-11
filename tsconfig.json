@@ -1,0 +1,20 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/types" },
+    { "path": "./packages/config" },
+    { "path": "./packages/schemas" },
+    { "path": "./apps/api" },
+    { "path": "./apps/web" }
+  ],
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}
