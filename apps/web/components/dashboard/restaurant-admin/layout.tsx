@@ -8,13 +8,17 @@ import { AuthService } from '@/lib/auth'
 import { RestaurantOverview } from './restaurant-overview'
 import { ApprovalDashboard } from './approval-dashboard'
 import { RecipeManagement } from './recipe-management'
+import { InventoryManagement } from './inventory-management'
+import { WasteManagement } from './waste-management'
 import { 
   BuildingStorefrontIcon,
   ClipboardDocumentListIcon,
   BeakerIcon,
   ChartBarIcon,
   UserGroupIcon,
-  Cog6ToothIcon
+  Cog6ToothIcon,
+  CubeIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline'
 
 interface RestaurantAdminLayoutProps {
@@ -31,6 +35,8 @@ export function RestaurantAdminLayout({ user }: RestaurantAdminLayoutProps) {
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: ChartBarIcon },
+    { id: 'inventory', label: 'Inventory', icon: CubeIcon },
+    { id: 'waste', label: 'Waste Management', icon: ExclamationTriangleIcon },
     { id: 'approvals', label: 'Approvals', icon: ClipboardDocumentListIcon },
     { id: 'recipes', label: 'Recipes', icon: BeakerIcon },
     { id: 'branches', label: 'Branches', icon: BuildingStorefrontIcon },
@@ -42,6 +48,10 @@ export function RestaurantAdminLayout({ user }: RestaurantAdminLayoutProps) {
     switch (activeTab) {
       case 'overview':
         return <RestaurantOverview />
+      case 'inventory':
+        return <InventoryManagement />
+      case 'waste':
+        return <WasteManagement />
       case 'approvals':
         return <ApprovalDashboard />
       case 'recipes':

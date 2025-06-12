@@ -63,16 +63,38 @@ export async function inventoryRoutes(fastify: FastifyInstance) {
     const { category, lowStock, expiringSoon } = request.query as any;
     
     try {
+      console.log('🚀 GET /inventory/items - User:', {
+        userId: user.id,
+        username: user.username,
+        role: user.role,
+        branchId: user.branchId,
+        tenantId: user.tenantId
+      });
+      console.log('📊 Query params:', { category, lowStock, expiringSoon });
+
+      // RESTAURANT_ADMIN can access all branches, BRANCH_ADMIN needs branchId
+      if (user.role === 'BRANCH_ADMIN' && !user.branchId) {
+        throw new Error('Branch Admin users require a branchId for inventory access');
+      }
+
       const inventory = await InventoryService.getInventoryWithBatches(
-        user.branchId!,
-        { category, lowStock: lowStock === 'true', expiringSoon: expiringSoon === 'true' }
+        user.branchId, // null for RESTAURANT_ADMIN = all branches
+        { 
+          category, 
+          lowStock: lowStock === 'true', 
+          expiringSoon: expiringSoon === 'true',
+          tenantId: user.tenantId // Add tenant scoping
+        }
       );
+
+      console.log(`✅ Successfully retrieved ${inventory.length} inventory items`);
 
       return {
         success: true,
         data: inventory
       };
     } catch (error) {
+      console.error('❌ Error in GET /inventory/items:', error);
       fastify.log.error(error);
       return reply.status(500).send({
         success: false,
@@ -192,13 +214,23 @@ export async function inventoryRoutes(fastify: FastifyInstance) {
     const user = request.user!;
     
     try {
-      const lowStockItems = await InventoryService.getLowStockItems(user.branchId!);
+      console.log('🚀 GET /inventory/alerts/low-stock - User branchId:', user.branchId);
+
+      // RESTAURANT_ADMIN can access all branches, BRANCH_ADMIN needs branchId
+      if (user.role === 'BRANCH_ADMIN' && !user.branchId) {
+        throw new Error('Branch Admin users require a branchId for inventory access');
+      }
+
+      const lowStockItems = await InventoryService.getLowStockItems(user.branchId, user.tenantId);
+
+      console.log(`✅ Successfully retrieved ${lowStockItems.length} low stock items`);
 
       return {
         success: true,
         data: lowStockItems
       };
     } catch (error) {
+      console.error('❌ Error in GET /inventory/alerts/low-stock:', error);
       fastify.log.error(error);
       return reply.status(500).send({
         success: false,
@@ -215,16 +247,27 @@ export async function inventoryRoutes(fastify: FastifyInstance) {
     const { days = 7 } = request.query as any;
     
     try {
+      console.log('🚀 GET /inventory/alerts/expiring - User branchId:', user.branchId, 'days:', days);
+
+      // RESTAURANT_ADMIN can access all branches, BRANCH_ADMIN needs branchId
+      if (user.role === 'BRANCH_ADMIN' && !user.branchId) {
+        throw new Error('Branch Admin users require a branchId for inventory access');
+      }
+
       const expiringItems = await InventoryService.getExpiringItems(
-        user.branchId!,
-        parseInt(days)
+        user.branchId,
+        parseInt(days),
+        user.tenantId
       );
+
+      console.log(`✅ Successfully retrieved ${expiringItems.length} expiring items`);
 
       return {
         success: true,
         data: expiringItems
       };
     } catch (error) {
+      console.error('❌ Error in GET /inventory/alerts/expiring:', error);
       fastify.log.error(error);
       return reply.status(500).send({
         success: false,

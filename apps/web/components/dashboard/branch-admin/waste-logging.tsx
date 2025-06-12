@@ -8,8 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { useWasteEntries, useCreateWasteEntry, useWasteAnalytics } from '@/hooks/use-waste'
 import { useInventoryItems } from '@/hooks/use-inventory'
 import { useRecipes } from '@/hooks/use-recipes'
-import { WasteEntryForm } from './waste-entry-form'
-import { WasteAnalyticsChart } from './waste-analytics-chart'
+import { WasteEntryForm } from '../shared/waste-entry-form'
+import { WasteAnalyticsChart } from '../shared/waste-analytics-chart'
 import { 
   PlusIcon, 
   ChartBarIcon,

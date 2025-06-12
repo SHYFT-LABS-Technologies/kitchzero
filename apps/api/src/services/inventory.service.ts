@@ -275,17 +275,22 @@ export class InventoryService {
   }
 
   // Get low stock items
-  static async getLowStockItems(branchId: string): Promise<any[]> {
+  static async getLowStockItems(branchId: string | null, tenantId: string): Promise<any[]> {
     try {
-      const lowStockItems = await prisma.inventoryItem.findMany({
-        where: {
-          branchId,
-          currentStock: {
-            lte: prisma.inventoryItem.fields.minStockLevel
-          }
-        },
+      console.log('🔍 Fetching low stock items for branchId:', branchId, 'tenantId:', tenantId);
+      
+      // Build where clause based on branchId (null = all branches for restaurant admin)
+      const where: any = { tenantId };
+      if (branchId) {
+        where.branchId = branchId;
+      }
+      
+      // Get all inventory items first, then filter in application
+      const allItems = await prisma.inventoryItem.findMany({
+        where,
         include: {
           supplier: true,
+          branch: true, // Include branch info for restaurant admin
           batches: {
             where: {
               remainingQuantity: { gt: 0 }
@@ -299,27 +304,45 @@ export class InventoryService {
         ]
       });
 
+      console.log(`📦 Found ${allItems.length} total inventory items`);
+
+      // Filter items where currentStock <= minStockLevel
+      const lowStockItems = allItems.filter(item => 
+        Number(item.currentStock) <= Number(item.minStockLevel)
+      );
+
+      console.log(`⚠️ Found ${lowStockItems.length} low stock items`);
+
       return lowStockItems.map(item => ({
         ...item,
         stockLevel: Number(item.currentStock) <= 0 ? 'OUT_OF_STOCK' :
-                   Number(item.currentStock) <= Number(item.minStockLevel) * 0.5 ? 'CRITICAL' :'LOW',
-       daysUntilEmpty: this.calculateDaysUntilEmpty(item),
-       nextExpiryDate: item.batches[0]?.expiryDate || null
-     }));
-   } catch (error) {
-     throw new Error(`Failed to get low stock items: ${error.message}`);
-   }
- }
+                   Number(item.currentStock) <= Number(item.minStockLevel) * 0.5 ? 'CRITICAL' : 'LOW',
+        daysUntilEmpty: this.calculateDaysUntilEmpty(item),
+        nextExpiryDate: item.batches[0]?.expiryDate || null
+      }));
+    } catch (error) {
+      console.error('❌ Error in getLowStockItems:', error);
+      throw new Error(`Failed to get low stock items: ${error.message}`);
+    }
+  }
 
  // Get expiring items
- static async getExpiringItems(branchId: string, daysAhead: number = 7): Promise<any[]> {
+ static async getExpiringItems(branchId: string | null, daysAhead: number = 7, tenantId: string): Promise<any[]> {
    try {
+     console.log(`🔍 Fetching expiring items for branchId: ${branchId}, daysAhead: ${daysAhead}, tenantId: ${tenantId}`);
+     
      const expiryDate = new Date();
      expiryDate.setDate(expiryDate.getDate() + daysAhead);
 
+     // Build where clause - if branchId is null, get from all branches in tenant
+     const inventoryItemWhere: any = { tenantId };
+     if (branchId) {
+       inventoryItemWhere.branchId = branchId;
+     }
+
      const expiringBatches = await prisma.inventoryBatch.findMany({
        where: {
-         inventoryItem: { branchId },
+         inventoryItem: inventoryItemWhere,
          expiryDate: {
            lte: expiryDate,
            gte: new Date()
@@ -327,10 +350,16 @@ export class InventoryService {
          remainingQuantity: { gt: 0 }
        },
        include: {
-         inventoryItem: true
+         inventoryItem: {
+           include: {
+             branch: true // Include branch info for restaurant admin
+           }
+         }
        },
        orderBy: { expiryDate: 'asc' }
      });
+
+     console.log(`⏰ Found ${expiringBatches.length} expiring batches`);
 
      return expiringBatches.map(batch => ({
        ...batch,
@@ -340,6 +369,7 @@ export class InventoryService {
        urgency: this.getExpiryUrgency(batch.expiryDate!)
      }));
    } catch (error) {
+     console.error('❌ Error in getExpiringItems:', error);
      throw new Error(`Failed to get expiring items: ${error.message}`);
    }
  }
@@ -365,22 +395,23 @@ export class InventoryService {
  }
 
  // Get inventory with FIFO batch details
- static async getInventoryWithBatches(branchId: string, filters?: {
+ static async getInventoryWithBatches(branchId: string | null, filters?: {
    category?: InventoryCategory;
    lowStock?: boolean;
    expiringSoon?: boolean;
+   tenantId?: string;
  }): Promise<any[]> {
    try {
-     const where: any = { branchId };
+     console.log(`🔍 Fetching inventory with batches for branchId: ${branchId}`, filters);
+     
+     // Build where clause - tenant is required, branchId is optional for restaurant admin
+     const where: any = { tenantId: filters?.tenantId };
+     if (branchId) {
+       where.branchId = branchId;
+     }
      
      if (filters?.category) {
        where.category = filters.category;
-     }
-     
-     if (filters?.lowStock) {
-       where.currentStock = {
-         lte: prisma.inventoryItem.fields.minStockLevel
-       };
      }
 
      const items = await prisma.inventoryItem.findMany({
@@ -393,13 +424,28 @@ export class InventoryService {
              { receivedDate: 'asc' }
            ]
          },
-         supplier: true
+         supplier: true,
+         branch: true // Include branch info for restaurant admin
        },
        orderBy: { name: 'asc' }
      });
 
-     return items.map(item => ({
+     console.log(`📦 Found ${items.length} inventory items with batches`);
+
+     let filteredItems = items;
+
+     // Apply low stock filter after fetching
+     if (filters?.lowStock) {
+       filteredItems = items.filter(item => 
+         Number(item.currentStock) <= Number(item.minStockLevel)
+       );
+       console.log(`⚠️ Filtered to ${filteredItems.length} low stock items`);
+     }
+
+     const result = filteredItems.map(item => ({
        ...item,
+       averageUnitCost: item.batches.length > 0 ? 
+         item.batches.reduce((sum, batch) => sum + Number(batch.unitCost), 0) / item.batches.length : 0,
        fifoOrder: item.batches.map((batch, index) => ({
          ...batch,
          fifoPosition: index + 1,
@@ -411,7 +457,11 @@ export class InventoryService {
          (sum, batch) => sum + (Number(batch.remainingQuantity) * Number(batch.unitCost)), 0
        )
      }));
+
+     console.log(`✅ Returning ${result.length} processed inventory items`);
+     return result;
    } catch (error) {
+     console.error('❌ Error in getInventoryWithBatches:', error);
      throw new Error(`Failed to get inventory with batches: ${error.message}`);
    }
  }

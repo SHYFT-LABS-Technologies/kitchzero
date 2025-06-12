@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useInventoryItems, useLowStockItems, useExpiringItems } from '@/hooks/use-inventory'
-import { InventoryTable } from './inventory-table'
-import { AddInventoryModal } from './add-inventory-modal'
-import { AdjustmentRequestModal } from './adjustment-request-modal'
+import { InventoryTable } from '../shared/inventory-table'
+import { AddInventoryModal } from '../shared/add-inventory-modal'
+import { AdjustmentRequestModal } from '../shared/adjustment-request-modal'
 import { 
   PlusIcon, 
   MagnifyingGlassIcon,
