@@ -1,4 +1,4 @@
-// apps/web/app/dashboard/page.tsx (Updated to redirect based on role)
+// apps/web/app/dashboard/page.tsx (Updated)
 'use client'
 
 import { useEffect, useState } from 'react'

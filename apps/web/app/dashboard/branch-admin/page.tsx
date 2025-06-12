@@ -1,10 +1,10 @@
-// apps/web/app/dashboard/branch-admin/page.tsx
+// apps/web/app/dashboard/branch-admin/page.tsx (Updated)
 'use client'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AuthService } from '@/lib/auth'
-import { BranchAdminDashboard } from '@/components/dashboard/branch-admin-dashboard'
+import { BranchAdminLayout } from '@/components/dashboard/branch-admin/layout'
 
 export default function BranchAdminPage() {
   const [user, setUser] = useState(null)
@@ -49,5 +49,5 @@ export default function BranchAdminPage() {
 
   if (!user) return null
 
-  return <BranchAdminDashboard user={user} />
+  return <BranchAdminLayout user={user} />
 }

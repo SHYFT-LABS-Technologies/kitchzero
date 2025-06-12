@@ -1,10 +1,10 @@
-// apps/web/app/dashboard/restaurant-admin/page.tsx
+// apps/web/app/dashboard/restaurant-admin/page.tsx (Updated)
 'use client'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AuthService } from '@/lib/auth'
-import { RestaurantAdminDashboard } from '@/components/dashboard/restaurant-admin-dashboard'
+import { RestaurantAdminLayout } from '@/components/dashboard/restaurant-admin/layout'
 import { UserRole } from '@kitchzero/types'
 
 export default function RestaurantAdminPage() {
@@ -42,5 +42,5 @@ export default function RestaurantAdminPage() {
 
   if (!user) return null
 
-  return <RestaurantAdminDashboard user={user} />
+  return <RestaurantAdminLayout user={user} />
 }
