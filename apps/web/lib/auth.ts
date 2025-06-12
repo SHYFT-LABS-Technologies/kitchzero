@@ -1,4 +1,4 @@
-// apps/web/lib/auth.ts (Update API calls)
+// apps/web/lib/auth.ts (Enhanced with refresh token handling)
 import Cookies from 'js-cookie'
 
 export interface User {
@@ -45,26 +45,12 @@ export class AuthService {
 
     // Store tokens and user data
     const { user, tokens } = data.data
-    Cookies.set(this.ACCESS_TOKEN_KEY, tokens.accessToken, { 
-      expires: 7,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict'
-    })
-    Cookies.set(this.REFRESH_TOKEN_KEY, tokens.refreshToken, { 
-      expires: 7,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict'
-    })
-    Cookies.set(this.USER_KEY, JSON.stringify(user), { 
-      expires: 7,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict'
-    })
+    this.setTokens(tokens)
+    this.setUser(user)
 
     return data.data
   }
 
-  // NEW: Change password method
   static async changePassword(data: {
     currentPassword: string
     newPassword: string
@@ -89,7 +75,6 @@ export class AuthService {
     return result
   }
 
-  // NEW: Check password strength
   static async checkPasswordStrength(password: string, username?: string): Promise<any> {
     const response = await fetch(`${API_BASE_URL}/auth/check-password-strength`, {
       method: 'POST',
@@ -110,7 +95,6 @@ export class AuthService {
     return result
   }
 
-  // NEW: Get password requirements
   static async getPasswordRequirements(): Promise<any> {
     const response = await fetch(`${API_BASE_URL}/auth/password-requirements`, {
       method: 'GET',
@@ -129,8 +113,28 @@ export class AuthService {
     return result
   }
 
+  static async refreshTokens(refreshToken: string): Promise<AuthTokens> {
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ refreshToken }),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Token refresh failed')
+    }
+
+    this.setTokens(data.data)
+    return data.data
+  }
+
   static async logout(): Promise<void> {
-    const refreshToken = Cookies.get(this.REFRESH_TOKEN_KEY)
+    const refreshToken = this.getRefreshToken()
     
     if (refreshToken) {
       try {
@@ -148,14 +152,15 @@ export class AuthService {
       }
     }
 
-    // Clear all auth data
-    Cookies.remove(this.ACCESS_TOKEN_KEY)
-    Cookies.remove(this.REFRESH_TOKEN_KEY)
-    Cookies.remove(this.USER_KEY)
+    this.clearAuth()
   }
 
   static getAccessToken(): string | undefined {
     return Cookies.get(this.ACCESS_TOKEN_KEY)
+  }
+
+  static getRefreshToken(): string | undefined {
+    return Cookies.get(this.REFRESH_TOKEN_KEY)
   }
 
   static getUser(): User | null {
@@ -186,16 +191,45 @@ export class AuthService {
       })
 
       if (!response.ok) {
-        this.logout()
+        this.clearAuth()
         return null
       }
 
       const data = await response.json()
-      return data.data.user
+      const user = data.data.user
+      this.setUser(user)
+      return user
     } catch (error) {
       console.error('Get current user error:', error)
-      this.logout()
+      this.clearAuth()
       return null
     }
+  }
+
+  private static setTokens(tokens: AuthTokens) {
+    const secure = process.env.NODE_ENV === 'production'
+    const cookieOptions = {
+      expires: 7,
+      secure,
+      sameSite: 'strict' as const
+    }
+
+    Cookies.set(this.ACCESS_TOKEN_KEY, tokens.accessToken, cookieOptions)
+    Cookies.set(this.REFRESH_TOKEN_KEY, tokens.refreshToken, cookieOptions)
+  }
+
+  private static setUser(user: User) {
+    const secure = process.env.NODE_ENV === 'production'
+    Cookies.set(this.USER_KEY, JSON.stringify(user), { 
+      expires: 7,
+      secure,
+      sameSite: 'strict'
+    })
+  }
+
+  private static clearAuth() {
+    Cookies.remove(this.ACCESS_TOKEN_KEY)
+    Cookies.remove(this.REFRESH_TOKEN_KEY)
+    Cookies.remove(this.USER_KEY)
   }
 }
